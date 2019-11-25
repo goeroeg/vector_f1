@@ -1,0 +1,23 @@
+{
+  "name": "vector_f1",
+  "description": "A simple vector F1 race game implementation.",
+  "version": "0.1.0",
+  "scripts": {
+    "serve": "http-server ."
+  },
+  "dependencies" :
+      { "three" : "^0.110.0"
+      , "http-server" : "^0.11.1"
+      },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/goeroeg/vector_f1.git"
+  },
+  "keywords": [],
+  "author": "goeroeg",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/goeroeg/vector_f1/issues"
+  },
+  "homepage": "https://github.com/agoeroeg/vector_f1"
+}
