@@ -4,7 +4,6 @@
 		<title>Vector F1 race</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-		<link type="text/css" rel="stylesheet" href="main.css">
 		<style>
 			body {
 				background-color: rgb(255, 255, 255);
@@ -12,10 +11,22 @@
 				margin: 0px;
   				overflow: hidden;
 			}
+
+			#playerInfo {
+				position: absolute;
+				top: 10px;
+				width: 100%;
+				text-align: center;
+				z-index: 100;
+				display:block;
+				text-align: left;
+				font-size: x-large;
+			}
 		</style>
 	</head>
 
 	<body>		
+		<div id="playerInfo">Next player:</div>
 		<script type="module" src="vectorf1.js"></script>
     </body>
 </html>

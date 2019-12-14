@@ -3,39 +3,52 @@ import * as THREE from './node_modules/three/build/three.module.js';
 import { GUI } from './node_modules/three/examples/jsm/libs/dat.gui.module.js';
 import { MapControls } from './node_modules/three/examples/jsm/controls/OrbitControls.js';
 
-
-var camera, controls, scene, renderer, raycaster, INTERSECTED;
+var camera, controls, scene, renderer, raycaster, intersectedObject;
 
 var mouse = new THREE.Vector2();
 
 const pixPerMm = 5.906;
 
-var pageSizes = { A0:{mmX:841, mmY:1189}, 
-                  A1:{mmX:594, mmY:841},
-                  A2:{mmX:420, mmY:594},
-                  A3:{mmX:297, mmY:420},
-                  A4:{mmX:210, mmY:297},
-                  A5:{mmX:148, mmY:210}}
+var pageSizes = {A0:{mmX: 841, mmY: 1189}, 
+                 A1:{mmX: 594, mmY: 841},
+                 A2:{mmX: 420, mmY: 594},
+                 A3:{mmX: 297, mmY: 420},
+                 A4:{mmX: 210, mmY: 297},
+                 A5:{mmX: 148, mmY: 210}}
 
-var pageSize = pageSizes.A5;
+var neighborIdxsTemplate = [[-1, -1],[-1, 0], [-1, 1],[0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 
 var nodes = [];
 var nodeMeshMap = new Map();
 
-initNodes();
+var nodeArray = [];
+
+var players = [];
+var currentPlayer;
+var playerIdx;
+
+var gameSettings = {pageSize: pageSizes.A4, playerCount: 1};
+
+var gui, playersFolder, gfxFolder, gameFolder, playerInfo;
 
 init();
-    
-initScene();
-
-
-//render(); // remove when using next line for animation loop (requestAnimationFrame)
-animate();
 
 function init() {
-    
+    initNodes();
+    initScene();
+    initControls();
+    initGUI();
 
-    
+    initPlayers(gameSettings.playerCount);
+        
+    //render(); // remove when using next line for animation loop (requestAnimationFrame)
+    animate();
+}
+
+function initControls() {
+
+    playerInfo = document.getElementById('playerInfo');
+
     renderer = new THREE.WebGLRenderer( { antialias: true } );
     renderer.setPixelRatio( window.devicePixelRatio );
     renderer.setSize( window.innerWidth, window.innerHeight );
@@ -43,7 +56,7 @@ function init() {
 
     camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 5000 );
     camera.up = new THREE.Vector3(0, 0, 1);
-    camera.position.set(pageSize.mmX / 2 * pixPerMm, 0, pageSize.mmX );
+    camera.position.set(gameSettings.pageSize.mmX / 2 * pixPerMm, 0, gameSettings.pageSize.mmX );
     
     raycaster = new THREE.Raycaster();
 
@@ -61,9 +74,24 @@ function init() {
     window.addEventListener( 'resize', onWindowResize, false );
 
     document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+    document.addEventListener( 'click', onDocumentClick, false );
 
-    var gui = new GUI();
-    gui.add( controls, 'screenSpacePanning' );
+}
+
+function initGUI() {
+
+    gui = new GUI();
+
+    gfxFolder = gui.addFolder ("Graphics settings");
+    gameFolder = gui.addFolder("Game settings");
+
+    gameFolder.add(gameSettings, "pageSize", pageSizes).setValue(pageSizes.A4);
+    gameFolder.add(gameSettings, "playerCount", 1, 8).step(1).onChange(function(value) {
+         initPlayers(value);
+      });
+      
+    playersFolder = gui.addFolder("Players");
+    playersFolder.open();
 }
 
 function initScene() {
@@ -75,6 +103,7 @@ function initScene() {
     //var geometry = new THREE.PlaneGeometry( 200, 200 );
     //geometry.rotateX(Math.PI / 2);
 
+    var pageSize = gameSettings.pageSize;
     var geometry = new THREE.BoxBufferGeometry(pageSize.mmX * pixPerMm, pageSize.mmY * pixPerMm, 1);
     var texture = initTexture(64, 0.5, pageSize.mmX / 10, pageSize.mmY / 10);
     var material = new THREE.MeshBasicMaterial({ map: texture });
@@ -155,6 +184,22 @@ function onDocumentMouseMove( event ) {
     mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
 }
 
+function onDocumentClick( event ) {
+    event.preventDefault();
+
+    raycaster.setFromCamera( mouse, camera );
+    var intersects = raycaster.intersectObjects( scene.children );
+
+    if (intersectedObject) {
+        var clickedNode = intersectedObject.node;
+        if (clickedNode){
+            var mesh = nodeMeshMap.get(clickedNode);
+            mesh.material.opacity = 0.1;       
+            performStep();     
+        }
+    }
+}
+
 function animate() {
     requestAnimationFrame( animate );
     controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = true
@@ -170,15 +215,15 @@ function checkIntersect(){
     raycaster.setFromCamera( mouse, camera );
     var intersects = raycaster.intersectObjects( scene.children );
     if ( intersects.length > 0 ) {
-        if ( INTERSECTED != intersects[0].object ) {
+        if ( intersectedObject != intersects[0].object ) {
             resetIntersect();
 
             if (intersects[0].object.node){
-                INTERSECTED = intersects[0].object;
-                INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
-                INTERSECTED.material.emissive.setHex( 0xff0000 );
-                INTERSECTED.material.opacity = 0.5;
-                for (let neighbor of INTERSECTED.node.neighbors)
+                intersectedObject = intersects[0].object;
+                intersectedObject.currentHex = intersectedObject.material.emissive.getHex();
+                intersectedObject.material.emissive.setHex( 0xff0000 );
+                intersectedObject.material.opacity = 0.5;
+                for (let neighbor of intersectedObject.node.neighbors)
                 {
                     var neighborMesh = nodeMeshMap.get(neighbor);
                     neighborMesh.material.emissive.setHex(0x0000ff);
@@ -192,42 +237,98 @@ function checkIntersect(){
 }
 
 function resetIntersect() {
-    if (INTERSECTED) {
-        INTERSECTED.material.emissive.setHex(INTERSECTED.currentHex);
-        INTERSECTED.material.opacity = 0;
-        for (let neighbor of INTERSECTED.node.neighbors) {
+    if (intersectedObject) {
+        intersectedObject.material.emissive.setHex(intersectedObject.currentHex);
+        intersectedObject.material.opacity = 0;
+        for (let neighbor of intersectedObject.node.neighbors) {
             var neighborMesh = nodeMeshMap.get(neighbor);
             neighborMesh.material.emissive.setHex(0x000000);
             neighborMesh.material.opacity = 0;
         }
     }
-    INTERSECTED = null;
+    intersectedObject = null;
 }
 
 function initNodes()
 {
-    for (var x = -pageSize.mmX / 2 + 5; x < pageSize.mmX / 2; x+=5) {
+    var xIdx = 0;
+    var yIdx = 0;
+
+    var pageSize = gameSettings.pageSize;
+
+    for (var x = -pageSize.mmX / 2 + 5; x < pageSize.mmX / 2; x+=5) {        
+        var yArray = [];
         for (var y = -pageSize.mmY / 2 + 5; y < pageSize.mmY / 2; y+=5) {
-            nodes.push({ x: x, y: y, color: 0x00aa00 })
+            var node = { x: x, y: y, xIdx: xIdx, yIdx: yIdx, color: 0x00aa00 };
+            nodes.push(node)
+            yArray.push(node)
+            yIdx++;
         } 
+        nodeArray.push(yArray);
+        yIdx = 0;
+        xIdx++;        
     } 
 
-    // not very effective but works
+    // set neighbors
     for (let node of nodes)
     {
         node.neighbors = [];
-        for (let anotherNode of nodes)
-        {
-            if (anotherNode != node && Math.abs(anotherNode.x - node.x) < 6 && Math.abs(anotherNode.y - node.y) < 6)
-            {
-                node.neighbors.push(anotherNode);
+
+        var neighborIdxs = [];
+        for (let idxsTemplate of neighborIdxsTemplate) {
+            neighborIdxs.push ([node.xIdx + idxsTemplate[0], node.yIdx + idxsTemplate[1]]);
+        }
+
+        for (let idxs of neighborIdxs) {
+            if (idxs[0] >= 0 && idxs[1] >= 0 && idxs[0] < nodeArray.length && idxs[1] < nodeArray[idxs[0]].length) {
+                node.neighbors.push(nodeArray[idxs[0]][idxs[1]]);
+            } 
+        }
+    }
+}
+
+function initPlayers(count)
+{
+    if (players) {
+        while (players.length > count) {
+            let player = players.pop();
+            if (playersFolder && player.controller) {
+                playersFolder.remove(player.controller);
             }
         }
-        if (node.neighbors.length > 8 || node.neighbors.length < 3) 
-        {
-            console.log(node);
+    }
+    else {
+        players = [];
+    }
+
+    let idx = players.length;
+
+    while (players.length < count) {        
+        players.push({index: idx, name: "Player" + (idx + 1), color: new THREE.Color() });
+        let player = players[idx++];
+        player.color.setHSL(idx/count, 1, 0.5);
+    
+        if (playersFolder) {
+            player.controller = playersFolder.add(player, "name").name("Name");
         }
     }
 
+    currentPlayer = players[0];    
+    
+    updatePlayerInfo();
 }
-		
+
+function performStep() {
+    currentPlayer = players[currentPlayer.index + 1];
+    if (!currentPlayer) {
+        currentPlayer = players[0];
+    }
+    updatePlayerInfo();
+}
+
+function updatePlayerInfo() {
+    if (playerInfo) {
+        playerInfo.innerHTML = currentPlayer.name;
+    }
+}
+
